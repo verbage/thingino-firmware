@@ -215,7 +215,7 @@
       "time": {
         "enabled": true,
         "fill_color": "#FFFFFFCC",
-        "format": "%F %T",
+        "format": "%F, %T %Z",
         "position": "10,10",
         "rotation": 0,
         "stroke_color": "#000000CC"
@@ -306,7 +306,7 @@
       "time": {
         "enabled": true,
         "fill_color": "#FFFFFFCC",
-        "format": "%F %T",
+        "format": "%F, %T %Z",
         "position": "5,5",
         "rotation": 0,
         "stroke_color": "#000000CC"

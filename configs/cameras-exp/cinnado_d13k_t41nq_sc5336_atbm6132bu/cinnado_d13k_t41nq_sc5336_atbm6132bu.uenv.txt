@@ -1,4 +1,8 @@
 gpio_button=62
-gpio_default=18O 49o 50o 52O 57o 58i 62i 63O 79o 81o 82O
+gpio_default=18O 49o 50o 52O 57o 58i 62i 63O 66o 67o 68o 69o 76o 77o 79o 81o 82O 83o 84o
 
-# gpio_default=18O 49o 50o 52O 57o 58i 62i 63O 66o 67o 68o 69o 76o 77o 79o 81o 82O 83o 84o
+# these are the gpios for only non-motor components
+# gpio_default=18O 49o 50o 52O 57o 58i 62i 63O 79o 81o 82O
+
+# these are the eight motor-only gpios that I am NOT including to start to help mimimize confusion
+# gpio_default=66o 67o 68o 69o 76o 77o 83o 84o
