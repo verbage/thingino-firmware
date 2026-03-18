@@ -96,12 +96,7 @@ else
 FIGLET := $(shell command -v figlet) -t -f pagga
 endif
 
-SIZE_8M := 8388608
-SIZE_256K := 262144
-SIZE_64K := 65536
-SIZE_32K := 32768
-
-ALIGN_BLOCK := $(SIZE_32K)
+ALIGN_BLOCK := 32768
 
 U_BOOT_GITHUB_URL := https://github.com/gtxaspec/u-boot-ingenic/releases/download/latest
 
@@ -272,8 +267,6 @@ update:
 	@echo "=== UPDATING SUBMODULES ==="
 	git submodule init
 	git submodule update
-	# avoid changes to buildroot from mad agents
-	# chmod -R a-w $(BR2_EXTERNAL)/buildroot
 	@$(FIGLET) "$(GIT_BRANCH)"
 
 update_manual:
@@ -287,11 +280,11 @@ bootstrap:
 	$(SCRIPTS_DIR)/dep_check.sh
 
 build: BR2_MAKE_JOBS =
-build: $(U_BOOT_BIN) $(U_BOOT_ENV_TXT)
+build: $(U_BOOT_ENV_TXT)
 	$(info -------------------------------- $@)
 
 build_fast: BR2_MAKE_JOBS = -j$(shell nproc)
-build_fast: $(U_BOOT_BIN) $(U_BOOT_ENV_TXT)
+build_fast: $(U_BOOT_ENV_TXT)
 	$(info -------------------------------- $@)
 
 ### Configuration
@@ -303,9 +296,7 @@ CONFIG_DEPS_FILE = $(OUTPUT_DIR)/.config.deps
 CONFIG_FRAGMENT_FILES = $(addprefix configs/fragments/,$(addsuffix .fragment,$(FRAGMENTS)))
 CONFIG_INPUT_FILES = $(CONFIG_FRAGMENT_FILES) $(CAMERA_CONFIG_REAL)
 ifeq ($(RELEASE),0)
-ifneq ($(wildcard $(THINGINO_USER_DIR)/local.fragment),)
 CONFIG_INPUT_FILES += $(THINGINO_USER_DIR)/local.fragment
-endif
 ifneq ($(wildcard $(BR2_EXTERNAL)/local.mk),)
 CONFIG_INPUT_FILES += $(BR2_EXTERNAL)/local.mk
 endif
@@ -608,23 +599,27 @@ toolchain: defconfig
 	$(BR2_MAKE) sdk
 
 # flash new uboot image to the camera
-upboot_ota: $(U_BOOT_BIN)
+upboot_ota:
 	$(info -------------------------------- $@)
+	@test -f $(U_BOOT_BIN) || { echo "ERROR: $(U_BOOT_BIN) not found. Run make first."; exit 1; }
 	$(SCRIPTS_DIR)/fw_ota.sh $(U_BOOT_BIN) $(CAMERA_IP_ADDRESS)
 
 # flash compiled update image to the camera
-update_ota: $(FIRMWARE_BIN_NOBOOT)
+update_ota:
 	$(info -------------------------------- $@)
+	@test -f $(FIRMWARE_BIN_NOBOOT) || { echo "ERROR: $(FIRMWARE_BIN_NOBOOT) not found. Run make first."; exit 1; }
 	$(SCRIPTS_DIR)/fw_ota.sh $(FIRMWARE_BIN_NOBOOT) $(CAMERA_IP_ADDRESS)
 
 # flash compiled full image to the camera
-upgrade_ota: $(FIRMWARE_BIN_FULL)
+upgrade_ota:
 	$(info -------------------------------- $@)
+	@test -f $(FIRMWARE_BIN_FULL) || { echo "ERROR: $(FIRMWARE_BIN_FULL) not found. Run make first."; exit 1; }
 	$(SCRIPTS_DIR)/fw_ota.sh $(FIRMWARE_BIN_FULL) $(CAMERA_IP_ADDRESS)
 
 # upload firmware to tftp server
-upload_tftp: $(FIRMWARE_BIN_FULL)
+upload_tftp:
 	$(info -------------------------------- $@)
+	@test -f $(FIRMWARE_BIN_FULL) || { echo "ERROR: $(FIRMWARE_BIN_FULL) not found. Run make first."; exit 1; }
 	busybox tftp -l $(FIRMWARE_BIN_FULL) -r $(FIRMWARE_NAME_FULL) -p $(TFTP_IP_ADDRESS)
 
 # Start standalone TFTP server for serving firmware images
@@ -712,7 +707,7 @@ $(OUTPUT_DIR)/.config:
 $(FIRMWARE_BIN_FULL): $(U_BOOT_BIN) $(UB_ENV_BIN) $(CONFIG_BIN) $(KERNEL_BIN) $(ROOTFS_BIN) $(EXTRAS_BIN)
 	$(info -------------------------------- $@)
 	# create a blank slab
-	dd if=/dev/zero bs=$(SIZE_8M) skip=0 count=1 status=none | tr '\000' '\377' > $@
+	dd if=/dev/zero bs=8M skip=0 count=1 status=none | tr '\000' '\377' > $@
 	# add bootloader partition
 	dd if=$(U_BOOT_BIN) bs=$(U_BOOT_BIN_SIZE) seek=$(U_BOOT_OFFSET)B count=1 of=$@ conv=notrunc status=none
 	# add config partition
@@ -771,8 +766,22 @@ $(KERNEL_BIN):
 #	mv -vf $(OUTPUT_DIR)/images/uImage $@
 
 # rebuild rootfs (depends on kernel to ensure proper build order)
+# Pre-stamp thingino-uboot so Buildroot skips it during rootfs-squashfs.
+# It will be dirclean'd and rebuilt properly in the $(U_BOOT_BIN) rule,
+# once partition sizes are known from the rootfs.
 $(ROOTFS_BIN): $(KERNEL_BIN)
 	$(info -------------------------------- $@)
+	mkdir -p $(OUTPUT_DIR)/build/thingino-uboot-$(UBOOT_REPO_VERSION)
+	mkdir -p $(OUTPUT_DIR)/per-package/thingino-uboot/host
+	mkdir -p $(OUTPUT_DIR)/per-package/thingino-uboot/target
+	touch $(OUTPUT_DIR)/build/thingino-uboot-$(UBOOT_REPO_VERSION)/.stamp_downloaded \
+	      $(OUTPUT_DIR)/build/thingino-uboot-$(UBOOT_REPO_VERSION)/.stamp_extracted \
+	      $(OUTPUT_DIR)/build/thingino-uboot-$(UBOOT_REPO_VERSION)/.stamp_patched \
+	      $(OUTPUT_DIR)/build/thingino-uboot-$(UBOOT_REPO_VERSION)/.stamp_configured \
+	      $(OUTPUT_DIR)/build/thingino-uboot-$(UBOOT_REPO_VERSION)/.stamp_built \
+	      $(OUTPUT_DIR)/build/thingino-uboot-$(UBOOT_REPO_VERSION)/.stamp_installed \
+	      $(OUTPUT_DIR)/build/thingino-uboot-$(UBOOT_REPO_VERSION)/.stamp_target_installed \
+	      $(OUTPUT_DIR)/build/thingino-uboot-$(UBOOT_REPO_VERSION)/.stamp_images_installed
 	$(BR2_MAKE) $(BR2_MAKE_JOBS) rootfs-squashfs
 
 $(U_BOOT_ENV_TXT): $(ROOTFS_BIN)
@@ -922,4 +931,3 @@ run:
 .DEFAULT: check-config
 	$(info -------------------------------- $@)
 	$(BR2_MAKE) $@
-

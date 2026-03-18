@@ -1,5 +1,3 @@
-$(info --- FILE: thingino.mk)
-
 # Define qstrip if not already defined (usually defined by Buildroot)
 qstrip ?= $(strip $(subst ",,$(1)))
 
@@ -11,8 +9,6 @@ SOC_VENDOR := ingenic
 
 # Get SoC model from BR2_INGENIC_SOC_MODEL (single source of truth)
 SOC_MODEL_INPUT := $(call qstrip,$(BR2_INGENIC_SOC_MODEL))
-$(info SOC_MODEL ===> $(SOC_MODEL_INPUT))
-
 ifneq ($(SOC_MODEL_INPUT),)
 	# Database-driven approach
 	SOC_MODEL := $(shell echo $(SOC_MODEL_INPUT) | tr A-Z a-z)
@@ -583,6 +579,7 @@ ifeq ($(BR2_PACKAGE_THINGINO_UBOOT_FORMAT_CUSTOM_NAME),)
 	BR2_PACKAGE_THINGINO_UBOOT_FORMAT_CUSTOM_NAME := "u-boot-lzo-with-spl.bin"
 endif
 
+ifneq ($(SOC_ARCH),)
 UBOOT_REPO := https://github.com/gtxaspec/ingenic-u-boot-$(SOC_ARCH)
 
 ifeq ($(SOC_FAMILY),t40)
@@ -596,6 +593,7 @@ else
 endif
 
 UBOOT_REPO_VERSION := $(shell git ls-remote $(UBOOT_REPO) $(UBOOT_REPO_BRANCH) | head -1 | cut -f1)
+endif
 
 export UBOOT_BOARDNAME
 export UBOOT_REPO

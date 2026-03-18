@@ -1,7 +1,7 @@
 INGENIC_SDK_SITE_METHOD = git
 INGENIC_SDK_SITE = https://github.com/themactep/ingenic-sdk
 INGENIC_SDK_SITE_BRANCH = master
-INGENIC_SDK_VERSION = edf62e71283509a4ef0de58f875d4f6b3bf310b5
+INGENIC_SDK_VERSION = ed289dd4040f40ded090dd5bddaa2e0d7c96f8ae
 
 INGENIC_SDK_LICENSE = GPL-3.0
 INGENIC_SDK_LICENSE_FILES = LICENSE
@@ -20,6 +20,14 @@ ifeq ($(KERNEL_VERSION),3.10.14)
 INGENIC_SDK_MODULE_MAKE_OPTS += EXTRA_CFLAGS=-DCONFIG_KERNEL_3_10
 else
 INGENIC_SDK_MODULE_MAKE_OPTS += EXTRA_CFLAGS=-DCONFIG_KERNEL_4_4_94
+endif
+
+# Per-camera IQ file overrides (paths relative to BR2_EXTERNAL root)
+ifneq ($(call qstrip,$(BR2_SENSOR_1_IQ_FILE)),)
+	SENSOR_1_IQ_OVERRIDE = $(BR2_EXTERNAL_THINGINO_PATH)/$(call qstrip,$(BR2_SENSOR_1_IQ_FILE))
+endif
+ifneq ($(call qstrip,$(BR2_SENSOR_2_IQ_FILE)),)
+	SENSOR_2_IQ_OVERRIDE = $(BR2_EXTERNAL_THINGINO_PATH)/$(call qstrip,$(BR2_SENSOR_2_IQ_FILE))
 endif
 
 # Old SDK's don't set the SOC in the IQ file name
@@ -79,14 +87,20 @@ define GENERATE_GPIO_USERKEYS_CONFIG
 	fi
 endef
 
+# $(call INSTALL_SENSOR_BIN, model, bin_name, config_name, iq_override_path)
 define INSTALL_SENSOR_BIN
 	if [ "$(1)" != "" ] && [ "$(1)" != "none" ]; then \
 		$(if $(filter-out $(SENSOR_2_MODEL),$(1)),ln -sf /usr/share/sensor $(TARGET_DIR)/etc/sensor;) \
-		$(INSTALL) -D -m 0644 $(@D)/sensor-iq/$(SOC_FAMILY)/$(2).bin \
-			$(TARGET_DIR)/usr/share/sensor/$(3); \
-		if [ -f $(@D)/sensor-iq/$(SOC_FAMILY)/$(2)-cust.bin ]; then \
-			$(INSTALL) -D -m 0644 $(@D)/sensor-iq/$(SOC_FAMILY)/$(2)-cust.bin \
-				$(TARGET_DIR)/usr/share/sensor/$(patsubst %.bin,$(2)-cust-$(SOC_FAMILY).bin,$(3)); \
+		if [ -n "$(4)" ] && [ -f "$(4)" ]; then \
+			$(INSTALL) -D -m 0644 $(4) \
+				$(TARGET_DIR)/usr/share/sensor/$(3); \
+		else \
+			$(INSTALL) -D -m 0644 $(@D)/sensor-iq/$(SOC_FAMILY)/$(2).bin \
+				$(TARGET_DIR)/usr/share/sensor/$(3); \
+			if [ -f $(@D)/sensor-iq/$(SOC_FAMILY)/$(2)-cust.bin ]; then \
+				$(INSTALL) -D -m 0644 $(@D)/sensor-iq/$(SOC_FAMILY)/$(2)-cust.bin \
+					$(TARGET_DIR)/usr/share/sensor/$(patsubst %.bin,$(2)-cust-$(SOC_FAMILY).bin,$(3)); \
+			fi; \
 		fi; \
 		if [ "$(1)" != "$(2)" ]; then \
 			ln -sf $(3) $(TARGET_DIR)/usr/share/sensor/$(1)-$(SOC_FAMILY).bin; \
@@ -192,8 +206,8 @@ define INGENIC_SDK_INSTALL_TARGET_CMDS
 	done
 
 	if [ -n "$(SENSOR_1_MODEL)" ]; then \
-		$(call INSTALL_SENSOR_BIN,$(SENSOR_1_MODEL),$(SENSOR_1_BIN_NAME),$(SENSOR_1_CONFIG_NAME)); \
-		$(call INSTALL_SENSOR_BIN,$(SENSOR_2_MODEL),$(SENSOR_2_BIN_NAME),$(SENSOR_2_CONFIG_NAME)); \
+		$(call INSTALL_SENSOR_BIN,$(SENSOR_1_MODEL),$(SENSOR_1_BIN_NAME),$(SENSOR_1_CONFIG_NAME),$(SENSOR_1_IQ_OVERRIDE)); \
+		$(call INSTALL_SENSOR_BIN,$(SENSOR_2_MODEL),$(SENSOR_2_BIN_NAME),$(SENSOR_2_CONFIG_NAME),$(SENSOR_2_IQ_OVERRIDE)); \
 	fi
 
 	$(GENERATE_MODULE_LOADER)
