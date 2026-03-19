@@ -1,6 +1,8 @@
 # Thingino Firmware
 # https://github.com/themactep/thingino-firmware
 
+include Makefile.guided
+
 # Ensure default target builds firmware rather than guided placeholder
 .DEFAULT_GOAL := all
 
@@ -190,18 +192,6 @@ export FLASH_SIZE_MB
 
 RELEASE = 0
 
-EDITOR := $(shell which nano vim vi ed 2>/dev/null | head -1)
-
-define edit_file
-	$(info -------------------------------- $(1))
-	@if [ -z "$(EDITOR)" ]; then \
-		echo "No suitable editor found!"; \
-		exit 1; \
-	else \
-		$(EDITOR) $(2); \
-	fi
-endef
-
 # make command for buildroot
 BR2_MAKE = $(MAKE) -C $(BR2_EXTERNAL)/buildroot \
 	BR2_EXTERNAL=$(BR2_EXTERNAL) \
@@ -210,7 +200,7 @@ BR2_MAKE = $(MAKE) -C $(BR2_EXTERNAL)/buildroot \
 
 .PHONY: all bootstrap build build_fast clean clean-nfs-debug cleanbuild defconfig distclean \
 	dev fast help info pack release remove_bins repack sdk toolchain update upboot-ota \
-	upload_tftp upgrade_ota br-% check-config force-config show-config-deps clean-config \
+	upload_tftp upload_serial upgrade_ota br-% check-config force-config show-config-deps clean-config \
 	tftpd-start tftpd-stop tftpd-restart tftpd-status tftpd-logs show-vars run
 
 # Run a binary under QEMU in the build sysroot.
@@ -229,7 +219,7 @@ ifeq (run,$(firstword $(MAKECMDGOALS)))
 endif
 
 # Default: fast parallel incremental build
-all: defconfig build_fast pack
+all: defconfig info build_fast pack
 	$(info -------------------------------- $@)
 
 # legacy target used by GitHub CI
@@ -393,60 +383,6 @@ defconfig: check-config
 	@$(FIGLET) $(GIT_BRANCH)
 	# Ensure buildroot is properly configured
 	$(BR2_MAKE) BR2_DEFCONFIG=$(CAMERA_CONFIG_REAL) olddefconfig
-
-edit:
-	@bash -c 'while true; do \
-		CHOICE=$$(dialog --keep-tite --colors --title "Edit Menu" --menu "Choose an option to edit:" 16 60 10 \
-			"1" "Camera Config (edit-defconfig)" \
-			"2" "Module Config (edit-module)" \
-			"3" "System Config (edit-config)" \
-			"4" "Camera U-Boot Environment (edit-uenv)" \
-			"" "━━━━━━━━━ LOCAL OVERRIDES ━━━━━━━━━" \
-			"5" "Local Fragment (edit-localfragment)" \
-			"6" "Local Config (edit-localconfig)" \
-			"7" "Local Makefile (edit-localmk)" \
-			"8" "Local U-Boot Evironment (edit-localuenv)" 2>&1 >/dev/tty) || exit 0; \
-		\
-		[ -z "$$CHOICE" ] && continue; \
-		\
-		case "$$CHOICE" in \
-			"1") FILE="$(CAMERA_CONFIG_REAL)" ;; \
-			"2") FILE="$(MODULE_CONFIG_REAL)" ;; \
-			"3") FILE="$(BR2_EXTERNAL)/$(CAMERA_SUBDIR)/$(CAMERA)/$(CAMERA).config" ;; \
-			"4") FILE="$(BR2_EXTERNAL)/$(CAMERA_SUBDIR)/$(CAMERA)/$(CAMERA).uenv.txt" ;; \
-			"5") FILE="$(THINGINO_USER_DIR)/local.fragment" ;; \
-			"6") FILE="$(THINGINO_USER_DIR)/local.config" ;; \
-			"7") FILE="$(BR2_EXTERNAL)/local.mk" ;; \
-			"8") FILE="$(THINGINO_USER_DIR)/local.uenv.txt" ;; \
-			*) echo "Invalid option"; continue ;; \
-		esac; \
-		\
-		[ -z "$(EDITOR)" ] && { echo "No suitable editor found!"; exit 1; } || { $(EDITOR) "$$FILE"; break; }; \
-	done'
-
-edit-defconfig:
-	$(call edit_file,$@,$(CAMERA_CONFIG_REAL))
-
-edit-module:
-	$(call edit_file,$@,$(MODULE_CONFIG_REAL))
-
-edit-config:
-	$(call edit_file,$@,$(BR2_EXTERNAL)/$(CAMERA_SUBDIR)/$(CAMERA)/$(CAMERA).config)
-
-edit-uenv:
-	$(call edit_file,$@,$(BR2_EXTERNAL)/$(CAMERA_SUBDIR)/$(CAMERA)/$(CAMERA).uenv.txt)
-
-edit-localmk:
-	$(call edit_file,$@,$(BR2_EXTERNAL)/local.mk)
-
-edit-localconfig:
-	$(call edit_file,$@,$(THINGINO_USER_DIR)/local.config)
-
-edit-localfragment:
-	$(call edit_file,$@,$(THINGINO_USER_DIR)/local.fragment)
-
-edit-localuenv:
-	$(call edit_file,$@,$(THINGINO_USER_DIR)/local.uenv.txt)
 
 # Configuration debugging and maintenance targets
 show-config-deps:
@@ -799,7 +735,7 @@ $(U_BOOT_ENV_TXT): $(ROOTFS_BIN)
 	# Add complete mtdparts with aligned partitions and virtual aliases
 	echo "mtdparts=jz_sfc:$(U_BOOT_SIZE_KB)k(boot),$(UB_ENV_SIZE_KB)k(env),$(CONFIG_SIZE_KB)k(config),$(KERNEL_SIZE_KB)k(kernel),$(ROOTFS_SIZE_KB)k(rootfs),$(UPGRADE_SIZE_KB)k@$$(printf '0x%x' $(KERNEL_OFFSET))(upgrade),$(FLASH_SIZE_KB)k@0(all)" >> $@
 	# Simplified bootcmd - no need for sq probe or run mtdparts
-	echo 'bootcmd=sf probe;setenv bootargs mem=$${osmem} rmem=$${rmem} ispmem=$${ispmem} console=$${serialport},$${baudrate}n8 panic=$${panic_timeout} root=$${root} rootfstype=$${rootfstype} init=$${init} mtdparts=$${mtdparts};sf read $${baseaddr} $${kern_addr} $${kern_size};bootm $${baseaddr}' >> $@
+	echo 'bootcmd=sf probe;setenv bootargs mem=$${osmem} rmem=$${rmem}$$(UBOOT_ISPMEM)$$(UBOOT_NMEM)console=$${serialport},$${baudrate}n8 panic=$${panic_timeout} root=$${root} rootfstype=$${rootfstype} init=$${init} mtdparts=$${mtdparts};sf read $${baseaddr} $${kern_addr} $${kern_size};bootm $${baseaddr}' >> $@
 	exit
 
 # Rebuild U-Boot with actual partition sizes after rootfs is ready
@@ -919,6 +855,11 @@ show-vars:
 run:
 	$(info -------------------------------- $@)
 	$(SCRIPTS_DIR)/qemu_run.sh $(OUTPUT_DIR)/target $(_RUN_CMD)
+
+upload_serial:
+	$(info -------------------------------- $@)
+	@test -f $(FIRMWARE_BIN_FULL) || { echo "ERROR: $(FIRMWARE_BIN_FULL) not found. Run make first."; exit 1; }
+	$(HOST_DIR)/bin/thingino-cloner -i 0 -b -w $(FIRMWARE_BIN_FULL) --cpu $(SOC_FAMILY) --firmware-dir $(HOST_DIR)/share/thingino-cloner/firmwares --reboot
 
 # Catch-all rule: forward undefined targets to buildroot
 # This allows running buildroot targets directly without the br- prefix
