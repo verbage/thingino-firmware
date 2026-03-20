@@ -1,7 +1,7 @@
 FAAC_SITE_METHOD = git
 FAAC_SITE = https://github.com/knik0/faac
 FAAC_SITE_BRANCH = master
-FAAC_VERSION = 15999ce894be968656e45f3aa54735ad77d0117b
+FAAC_VERSION = 51bae8821e1780af581cb2fc01a6b74aaf7e0349
 
 FAAC_LICENSE = MPEG-4-Reference-Code, LGPL-2.1+
 FAAC_LICENSE_FILES = COPYING
@@ -14,7 +14,8 @@ FAAC_INSTALL_TARGET = YES
 FAAC_CONF_ENV += CFLAGS="$(TARGET_CFLAGS) -ffast-math"
 
 FAAC_CONF_OPTS = \
-	-Dfloating-point=single
+	-Dfloating-point=single \
+	-Dmax-channels=2
 
 ifneq ($(BR2_PACKAGE_FAAC_INSTALL_BIN),y)
 define FAAC_REMOVE_TARGET_BINARY
